@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
+       http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd">
+    <aop:aspectj-autoproxy />
+    <!-- 开启apollo注册中心自动注入 -->
+    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>/redispool.properties</value>
+            </list>
+        </property>
+    </bean>
+    <!--<apollo:config />-->
+    <bean id="redisClient" class="com.example.core.redis.redispool.RedisClient">
+        <constructor-arg name="jedisConfig" ref="jedisConfig"/>
+        <constructor-arg name="ip" value="${redis.ip}"/>
+        <constructor-arg name="port" value="${redis.port}"/>
+    </bean>
+    <!-- 连接池的配置信息 -->
+    <bean id="jedisConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <!-- 说明一个pool可以有多少个Jedis实例 -->
+        <property name="maxTotal" value="${redis.pool.maxActive}" />
+        <!-- 最大Idle-->
+        <property name="maxIdle" value="${redis.pool.maxIdle}" />
+        <!-- 最小Idle -->
+        <property name="minIdle" value="1" />
+        <!-- 获得一个jedis实例的时候是否检查连接可用性（ping()） -->
+        <property name="testOnBorrow" value="${redis.pool.testOnBorrow}" />
+        <!-- return 一个jedis实例给pool时，是否检查连接可用性（ping()） -->
+        <property name="testOnReturn" value="true" />
+        <!-- idle状态监测用异步线程evict进行检查， -->
+        <property name="testWhileIdle" value="true" />
+        <!-- 一次最多evict的pool里的jedis实例个数 -->
+        <property name="numTestsPerEvictionRun" value="10" />
+        <!-- test idle 线程的时间间隔 -->
+        <property name="timeBetweenEvictionRunsMillis" value="${redis.pool.timeBetweenEvictionRunsMillis}" />
+        <!--最大等待wait时间-->
+        <property name="maxWaitMillis" value="${redis.pool.maxWait}" />
+    </bean>
+
+    <bean id="redisClientFacade" class="com.example.core.redis.redispool.RedisClientFacade">
+        <property name="redisClient" ref="redisClient"/>
+        <property name="namespace" value="${namespace}"/>
+    </bean>
+
+
+
+    <bean id="methodCacheInterceptor" class="com.example.core.redis.redispool.MethodRedisCacheInterceptor">
+        <property name="redisClientFacade" ref="redisClientFacade" />
+    </bean>
+    <!--  flush cache拦截器   -->
+    <bean id="methodCacheAfterAdvice" class="com.example.core.redis.redispool.MethodRedisCacheAfterAdvice">
+        <property name="redisClientFacade" ref="redisClientFacade" />
+    </bean>
+    <bean id="methodCachePointCut" class="org.springframework.aop.support.RegexpMethodPointcutAdvisor">
+        <property name="advice" ref="methodCacheInterceptor"/>
+        <property name="patterns">
+            <list>
+                <value>com.example.redisdemo.service.Test1Service.*search.*</value>
+                <value>com.example.redisdemo.service.Test2Service.*search.*</value>
+            </list>
+        </property>
+    </bean>
+    <bean id="methodCachePointCutAdvice" class="org.springframework.aop.support.RegexpMethodPointcutAdvisor">
+        <property name="advice" ref="methodCacheAfterAdvice"/>
+        <property name="patterns">
+            <list>
+                <value>com.example.redisdemo.service.Test1Service.*update.*</value>
+                <value>com.example.redisdemo.service.Test2Service.*update.*</value>
+            </list>
+        </property>
+    </bean>
+    <!-- 采用redis的进行缓存配置  end -->
+</beans>
